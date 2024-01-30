@@ -6,29 +6,29 @@ function(add_uvw_library LIB_NAME)
     target_sources(
         ${LIB_NAME}
         PRIVATE
-            uvw/async.cpp
-            uvw/check.cpp
-            uvw/dns.cpp
-            uvw/emitter.cpp
-            uvw/fs.cpp
-            uvw/fs_event.cpp
-            uvw/fs_poll.cpp
-            uvw/idle.cpp
-            uvw/lib.cpp
-            uvw/loop.cpp
-            uvw/pipe.cpp
-            uvw/poll.cpp
-            uvw/prepare.cpp
-            uvw/process.cpp
-            uvw/signal.cpp
-            uvw/stream.cpp
-            uvw/tcp.cpp
-            uvw/thread.cpp
-            uvw/timer.cpp
-            uvw/tty.cpp
-            uvw/udp.cpp
-            uvw/util.cpp
-            uvw/work.cpp
+        uvw/async.cpp
+        uvw/check.cpp
+        uvw/dns.cpp
+        uvw/emitter.cpp
+        uvw/fs.cpp
+        uvw/fs_event.cpp
+        uvw/fs_poll.cpp
+        uvw/idle.cpp
+        uvw/lib.cpp
+        uvw/loop.cpp
+        uvw/pipe.cpp
+        uvw/poll.cpp
+        uvw/prepare.cpp
+        uvw/process.cpp
+        uvw/signal.cpp
+        uvw/stream.cpp
+        uvw/tcp.cpp
+        uvw/thread.cpp
+        uvw/timer.cpp
+        uvw/tty.cpp
+        uvw/udp.cpp
+        uvw/util.cpp
+        uvw/work.cpp
     )
 
     set_target_properties(${LIB_NAME} PROPERTIES POSITION_INDEPENDENT_CODE 1)
@@ -38,8 +38,8 @@ function(add_uvw_library LIB_NAME)
     target_include_directories(
         ${LIB_NAME}
         PUBLIC
-            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     )
 
     if(USE_ASAN)
@@ -60,20 +60,25 @@ endfunction()
 #
 # Build and install libraries
 #
-
-if (BUILD_UVW_SHARED_LIB)
+if(BUILD_UVW_SHARED_LIB)
+    message(STATUS "Building uvw as shared library")
     add_library(uvw SHARED)
     add_library(uvw::uvw-shared ALIAS uvw)
+
     # If libuv is not fetched by ourselves, it's the caller's responsibility to make sure of the linkage.
     if(FETCH_LIBUV OR libuv_FOUND)
-        target_link_libraries(uvw PUBLIC uv::uv-shared)
+        target_link_libraries(uvw PUBLIC ${LIBUV_TARGET})
+        add_library(uvw::uv-shared ALIAS ${LIBUV_TARGET})
     endif()
 else()
+    message(STATUS "Building uvw as static library")
     add_library(uvw STATIC)
     add_library(uvw::uvw-static ALIAS uvw)
+
     # If libuv is not fetched by ourselves, it's the caller's responsibility to make sure of the linkage.
     if(FETCH_LIBUV OR libuv_FOUND)
-        target_link_libraries(uvw PUBLIC uv::uv-static)
+        target_link_libraries(uvw PUBLIC ${LIBUV_TARGET})
+        add_library(uvw::uv-static ALIAS ${LIBUV_TARGET})
     endif()
 endif()
 

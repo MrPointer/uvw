@@ -2,12 +2,11 @@
 # uvw
 #
 
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.15)
 
 #
 # Building in-tree is not allowed (we take care of your craziness).
 #
-
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
     message(FATAL_ERROR "Prevented in-tree built. Please create a build directory outside of the source code and call cmake from there. Thank you.")
 endif()
@@ -16,8 +15,8 @@ endif()
 # Project configuration
 #
 set(UVW_VERSION_MAJOR 3)
-set(UVW_VERSION_MINOR 3)
-set(UVW_VERSION_PATCH 0)
+set(UVW_VERSION_MINOR 2)
+set(UVW_VERSION_PATCH 1)
 
 project(
     uvw
@@ -45,7 +44,6 @@ endif()
 #
 # Compiler stuff
 #
-
 if(NOT WIN32 AND USE_LIBCPP)
     include(CheckCXXSourceCompiles)
     include(CMakePushCheckState)
@@ -66,12 +64,12 @@ if(NOT WIN32 AND USE_LIBCPP)
     cmake_pop_check_state()
 endif()
 
-
 # Required minimal libuv version
 set(LIBUV_VERSION 1.46.0)
+set(LIBUV_TARGET "uv")
 
 function(fetch_libuv)
-    if (FETCH_LIBUV)
+    if(FETCH_LIBUV)
         include(FetchContent)
 
         FetchContent_Declare(
@@ -89,10 +87,10 @@ function(fetch_libuv)
         endif()
 
         if(BUILD_UVW_SHARED_LIB)
-            add_library(uv::uv-shared ALIAS uv)
+            set(LIBUV_TARGET uv)
             set_target_properties(uv PROPERTIES POSITION_INDEPENDENT_CODE 1)
         else()
-            add_library(uv::uv-static ALIAS uv_a)
+            set(LIBUV_TARGET uv_a)
             set_target_properties(uv_a PROPERTIES POSITION_INDEPENDENT_CODE 1)
         endif()
     endif(FETCH_LIBUV)
@@ -100,23 +98,45 @@ endfunction()
 
 function(use_libuv)
     set(FETCH_LIBUV_DEFAULT ON)
-    if (FIND_LIBUV)
+
+    if(FIND_LIBUV)
+        message(STATUS "FIND_LIBUV is set to ON, trying to find libuv library development files in the system")
         find_package(libuv ${LIBUV_VERSION} QUIET)
-        if (libuv_FOUND)
-            add_library(uv::uv-shared ALIAS uv)
+
+        if(libuv_FOUND)
+            if(TARGET uv)
+                set(LIBUV_TARGET uv)
+            elseif(TARGET uv_a)
+                set(LIBUV_TARGET uv_a)
+            else()
+                message(FATAL_ERROR "libuv was found but it doesn't have a target named uv or uv_a")
+            endif()
+
             set(FETCH_LIBUV_DEFAULT OFF)
-            message(STATUS "libuv ${libuv_VERSION} found via cmake")
-        else(libuv_FOUND)
+            message(STATUS "libuv ${libuv_VERSION} found via CMake's find_package()")
+        else()
             find_package(PkgConfig QUIET)
-            if (PkgConfig_FOUND)
+
+            if(PkgConfig_FOUND)
                 pkg_check_modules(libuv IMPORTED_TARGET libuv>=${LIBUV_VERSION})
-                if (libuv_FOUND)
-                    add_library(uv::uv-shared ALIAS PkgConfig::libuv)
+
+                if(libuv_FOUND)
+                    if(TARGET uv)
+                        set(LIBUV_TARGET uv)
+                    elseif(TARGET uv_a)
+                        set(LIBUV_TARGET uv_a)
+                    else()
+                        message(FATAL_ERROR "libuv was found but it doesn't have a target named uv or uv_a")
+                    endif()
+
                     set(FETCH_LIBUV_DEFAULT OFF)
                     message(STATUS "libuv ${libuv_VERSION} found via pkg-config")
-                endif(libuv_FOUND)
-            endif(PkgConfig_FOUND)
-        endif(libuv_FOUND)
+                endif()
+            endif()
+        endif()
+
+        set(LIBUV_TARGET ${LIBUV_TARGET} PARENT_SCOPE)
+        set(libuv_FOUND ${libuv_FOUND} PARENT_SCOPE)
     endif(FIND_LIBUV)
 
     option(FETCH_LIBUV "Fetch the libuv repo using CMake FetchContent facility" ${FETCH_LIBUV_DEFAULT})
@@ -126,9 +146,7 @@ endfunction()
 #
 # Add uvw target
 #
-
 include(GNUInstallDirs)
-
 
 if(BUILD_UVW_LIBS)
     use_libuv()
@@ -144,8 +162,8 @@ else()
     target_include_directories(
         uvw
         INTERFACE
-            $<BUILD_INTERFACE:${uvw_SOURCE_DIR}/src>
-            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+        $<BUILD_INTERFACE:${uvw_SOURCE_DIR}/src>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     )
 
     if(USE_ASAN)
@@ -168,7 +186,6 @@ endif()
 #
 # Install targets
 #
-
 install(
     FILES ${HEADERS}
     COMPONENT ${PROJECT_NAME}
@@ -186,45 +203,47 @@ install(
 #
 # Install targets
 #
-if (BUILD_UVW_LIBS)
+if(BUILD_UVW_LIBS)
     set_target_properties(
         uvw PROPERTIES
         VERSION ${UVW_VERSION_MAJOR}.${UVW_VERSION_MINOR}.${UVW_VERSION_PATCH}
         SOVERSION ${UVW_VERSION_MAJOR}
     )
 endif()
+
 install(
-    EXPORT uvwConfig 
-    NAMESPACE uvw:: 
+    EXPORT uvwConfig
+    NAMESPACE uvw::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/uvw
 )
 install(
-    TARGETS uvw 
+    TARGETS uvw
     EXPORT uvwConfig
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
+
 if(FETCH_LIBUV AND BUILD_UVW_LIBS)
     # libuv is only fetched when both above conditions are true
     install(DIRECTORY ${libuv_SOURCE_DIR}/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/uvw/uv/include)
-    if (BUILD_UVW_SHARED_LIB)
+
+    if(BUILD_UVW_SHARED_LIB)
         install(TARGETS uv EXPORT uvwConfig LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/uvw)
     else()
         install(TARGETS uv_a EXPORT uvwConfig ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/uvw)
     endif()
-    
 endif(FETCH_LIBUV AND BUILD_UVW_LIBS)
+
 export(EXPORT uvwConfig)
 
-### Testing
-
+# ## Testing
 option(BUILD_TESTING "Enable testing with ctest." OFF)
 
 if(BUILD_TESTING)
     option(FIND_GTEST_PACKAGE "Enable finding gtest package." OFF)
 
-    if (NOT BUILD_UVW_LIBS)
+    if(NOT BUILD_UVW_LIBS)
         use_libuv()
     endif()
 
@@ -235,7 +254,6 @@ endif()
 #
 # Documentation
 #
-
 option(BUILD_DOCS "Enable building with documentation." OFF)
 
 if(BUILD_DOCS)
@@ -249,19 +267,18 @@ endif()
 #
 # AOB
 #
-
 add_custom_target(
     uvw_aob
     SOURCES
-        .github/workflows/build-macos.yml
-        .github/workflows/build-ubuntu-20.04.yml
-        .github/workflows/build-ubuntu-latest.yml
-        .github/workflows/build-win.yml
-        .github/workflows/coverage.yml
-        .github/workflows/deploy.yml
-        .github/FUNDING.yml
-        AUTHORS
-        LICENSE
-        README.md
-        TODO
+    .github/workflows/build-macos.yml
+    .github/workflows/build-ubuntu-20.04.yml
+    .github/workflows/build-ubuntu-latest.yml
+    .github/workflows/build-win.yml
+    .github/workflows/coverage.yml
+    .github/workflows/deploy.yml
+    .github/FUNDING.yml
+    AUTHORS
+    LICENSE
+    README.md
+    TODO
 )
